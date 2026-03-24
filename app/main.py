@@ -182,7 +182,12 @@ def display_result(result: dict, show_sql: bool, show_debug: bool):
             figure = make_chart(df, chart_type=chart_type,
                                 title=result.get("question","")[:60])
             if figure:
-                st.plotly_chart(figure, use_container_width=True)
+                if figure:
+                    import hashlib
+                    chart_key = hashlib.md5(
+                       f"{result.get('question','')}{result.get('elapsed_ms',0)}".encode()
+                        ).hexdigest()[:8]
+                    st.plotly_chart(figure, use_container_width=True, key=f"chart_{chart_key}")
 
     result["figure"] = figure
 
