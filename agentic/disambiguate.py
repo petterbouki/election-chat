@@ -32,7 +32,12 @@ class AmbiguityDetector:
         return index
 
     def detect(self, question: str) -> Optional[dict]:
-        """Analyse la question et retourne un dict d'ambiguïté si détecté."""
+        # Ne pas désambiguïser les questions narratives directes
+        rag_direct = ["parle moi", "parle de", "qui a gagné", "qui a remporté", 
+                  "qui est l'élu", "dis moi", "raconte"]
+        if any(k in question.lower() for k in rag_direct):
+           return None  # Laisse le RAG répondre directement
+    
     
     # Mots génériques à ne PAS utiliser pour la recherche
         GENERIC_WORDS = {

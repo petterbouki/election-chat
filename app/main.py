@@ -29,7 +29,21 @@ st.markdown("""
 <style>
 .stat-box { background:#1D9E75; color:white; border-radius:12px; padding:16px;
             text-align:center; font-size:2rem; font-weight:700; margin:8px 0; }
+/* Auto-scroll */
+.main .block-container {
+    padding-bottom: 200px;
+}
 </style>
+<script>
+// Auto-scroll vers le bas
+function scrollToBottom() {
+    const messages = document.querySelectorAll('[data-testid="stChatMessage"]');
+    if (messages.length > 0) {
+        messages[messages.length - 1].scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+}
+setTimeout(scrollToBottom, 500);
+</script>
 """, unsafe_allow_html=True)
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────
@@ -254,5 +268,17 @@ if question:
         "content": result.get("narrative", ""),
         "result": result,
     })
+
+    # Force le scroll vers le bas
+    st.markdown("""
+    <script>
+      setTimeout(function() {
+      const messages = document.querySelectorAll('[data-testid="stChatMessage"]');
+      if (messages.length > 0) {
+        messages[messages.length - 1].scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
+      }, 300);
+    </script>
+    """, unsafe_allow_html=True)
 
     st.rerun()

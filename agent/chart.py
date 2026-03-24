@@ -65,7 +65,7 @@ def make_pie_chart(df: pd.DataFrame, title: str = "", names: Optional[str] = Non
         hole=0.35,
     )
     fig.update_traces(textposition="inside", textinfo="percent+label")
-    fig.update_layout(height=450, showlegend=True)
+    fig.update_layout(autosize=True, margin=dict(l=20, r=20, t=40, b=20),)
     return fig
 
 

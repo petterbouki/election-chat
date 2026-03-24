@@ -1,20 +1,27 @@
 """
 startup.py — Recrée la base DuckDB depuis les CSV au démarrage.
 """
+
 import duckdb
 import pandas as pd
 from pathlib import Path
 
 def init_db(db_path: str = "data/elections.duckdb"):
     if Path(db_path).exists():
-        return  # Déjà créée
+        return  # Déjà créée, rien à faire
 
     Path("data").mkdir(exist_ok=True)
+    print("📥 Chargement des CSV...")
+    
+    df_c = pd.read_csv("data/circonscriptions.csv", on_bad_lines='skip')
+    df_k = pd.read_csv("data/candidats.csv", on_bad_lines='skip')
+    
+    print(f"✔ Circonscriptions : {len(df_c)} lignes")
+    print(f"✔ Candidats : {len(df_k)} lignes")
+
+    # Connexion en écriture — une seule fois
     con = duckdb.connect(db_path)
-
-    df_c = pd.read_csv("data/circonscriptions.csv")
-    df_k = pd.read_csv("data/candidats.csv")
-
+    
     con.execute("CREATE TABLE circonscriptions AS SELECT * FROM df_c")
     con.execute("CREATE TABLE candidats AS SELECT * FROM df_k")
 
@@ -44,8 +51,10 @@ def init_db(db_path: str = "data/elections.duckdb"):
                c.inscrits, c.votants, c.taux_participation, c.source_page
         FROM candidats ca JOIN circonscriptions c ON c.id=ca.circonscription_id""")
 
-    con.close()
-    print(f"Base créée : {db_path}")
+    con.close()  # Ferme AVANT que Streamlit ouvre la connexion read_only
+    print(f"✅ Base créée : {db_path}")
 
+
+#  Point d’entrée
 if __name__ == "__main__":
     init_db()
