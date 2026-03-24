@@ -1,26 +1,16 @@
 """
-startup.py — Initialise la base DuckDB depuis les CSV.
+startup.py — Initialise la base DuckDB depuis les CSV au démarrage.
 """
 import duckdb
 import pandas as pd
 from pathlib import Path
-import time
 
 
 def init_db(db_path: str = "data/elections.duckdb"):
     Path("data").mkdir(exist_ok=True)
-    
-    lock_file = Path("data/.db_lock")
     db_file = Path(db_path)
-    
-    # Attend si un autre processus crée la base
-    timeout = 30
-    waited = 0
-    while lock_file.exists() and waited < timeout:
-        time.sleep(1)
-        waited += 1
-    
-    # Si la base existe déjà et est valide, on sort
+
+    # Vérifie si la base existe et est valide
     if db_file.exists():
         try:
             con = duckdb.connect(db_path, read_only=True)
@@ -30,36 +20,29 @@ def init_db(db_path: str = "data/elections.duckdb"):
                 print(f"✅ Base existante OK : {count} circs")
                 return
         except:
-            pass
-    
-    # Pose le verrou
-    lock_file.touch()
-    
-    try:
-        print("📥 Chargement des CSV...")
-        df_c = pd.read_csv("data/circonscriptions.csv", on_bad_lines='skip')
-        df_k = pd.read_csv("data/candidats.csv", on_bad_lines='skip')
-        print(f"✔ Circonscriptions : {len(df_c)}")
-        print(f"✔ Candidats : {len(df_k)}")
-
-        # Supprime l'ancienne base
-        if db_file.exists():
             db_file.unlink()
 
-        # Crée via fichier temporaire CSV → import direct
-        con = duckdb.connect(db_path)
-        
-        # Import direct depuis les fichiers CSV (plus fiable sur cloud)
-        con.execute(f"""
-            CREATE TABLE circonscriptions AS 
-            SELECT * FROM read_csv_auto('data/circonscriptions.csv', 
-                                         ignore_errors=true)
-        """)
-        con.execute(f"""
-            CREATE TABLE candidats AS 
-            SELECT * FROM read_csv_auto('data/candidats.csv',
-                                         ignore_errors=true)
-        """)
+    # Chemins absolus pour compatibilité cloud
+    base_dir = Path(__file__).parent
+    csv_circs = str(base_dir / "data" / "circonscriptions.csv")
+    csv_cands = str(base_dir / "data" / "candidats.csv")
+
+    print(f"📥 Chargement CSV depuis {base_dir}...")
+    df_c = pd.read_csv(csv_circs, on_bad_lines='skip')
+    df_k = pd.read_csv(csv_cands, on_bad_lines='skip')
+    print(f"✔ Circonscriptions : {len(df_c)}")
+    print(f"✔ Candidats : {len(df_k)}")
+
+    if db_file.exists():
+        db_file.unlink()
+
+    con = duckdb.connect(db_path)
+    try:
+        con.register("df_circs", df_c)
+        con.register("df_cands", df_k)
+
+        con.execute("CREATE TABLE circonscriptions AS SELECT * FROM df_circs")
+        con.execute("CREATE TABLE candidats AS SELECT * FROM df_cands")
 
         con.execute("""CREATE VIEW vw_winners AS
             SELECT c.id AS circonscription_id, c.nom AS circonscription, c.region,
@@ -89,13 +72,10 @@ def init_db(db_path: str = "data/elections.duckdb"):
 
         nb_c = con.execute("SELECT COUNT(*) FROM circonscriptions").fetchone()[0]
         nb_k = con.execute("SELECT COUNT(*) FROM candidats").fetchone()[0]
-        con.close()
         print(f"✅ Base créée : {nb_c} circs, {nb_k} candidats")
 
     finally:
-        # Supprime le verrou
-        if lock_file.exists():
-            lock_file.unlink()
+        con.close()
 
 
 if __name__ == "__main__":
