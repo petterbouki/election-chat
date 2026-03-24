@@ -10,7 +10,7 @@ pandas>=2.0
 duckdb>=0.10
 
 # LLM
-anthropic>=0.30
+groq
 
 # Application
 streamlit>=1.35
