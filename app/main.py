@@ -42,30 +42,38 @@ st.markdown("""
 
 /* Questions rapides */
 .quick-label { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 4px; }
+            
+/* Cache les boutons Streamlit Cloud */
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header { visibility: hidden; }
+[data-testid="stToolbar"] { display: none; }
+[data-testid="stDecoration"] { display: none; }
+.viewerBadge_container__r5tak { display: none; }            
 </style>
 """, unsafe_allow_html=True)
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("Elections CI 2025")
-    st.markdown("**Assemblée Nationale — 27 décembre 2025**")
-    st.divider()
-    st.markdown("**Questions suggérées**")
-    suggestions = [
-        "Combien de sièges a remporté le RHDP ?",
-        "Top 10 candidats par score",
-        "Taux de participation par région",
-        "Histogramme des élus par parti",
-        "Qui a gagné à Agboville ?",
-        "Les élus d'Abidjan",
-        "Quelle circonscription a le plus fort taux ?",
-        "Quels partis ont remporté des sièges ?",
-    ]
-    for s in suggestions:
-        if st.button(s, key=f"sug_{s[:20]}", use_container_width=True):
-            st.session_state["pending_question"] = s
+    st.title("Elections Législatives CI 2025")
+    #st.markdown("**Assemblée Nationale — 27 décembre 2025**")
+   # st.divider()
+   # st.markdown("**Questions suggérées**")
+    #suggestions = [
+    #    "Combien de sièges a remporté le RHDP ?",
+     #   "Top 10 candidats par score",
+     #   "Taux de participation par région",
+     #   "Histogramme des élus par parti",
+     #   "Qui a gagné à Agboville ?",
+     #   "Les élus d'Abidjan",
+     #   "Quelle circonscription a le plus fort taux ?",
+      #  "Quels partis ont remporté des sièges ?",
+    #]
+    #for s in suggestions:
+    #    if st.button(s, key=f"sug_{s[:20]}", use_container_width=True):
+    #        st.session_state["pending_question"] = s
 
-    st.divider()
+    #st.divider()
     if st.button("Effacer la conversation", use_container_width=True):
         st.session_state["messages"] = []
         st.session_state["chart_counter"] = 0
@@ -166,13 +174,9 @@ def display_result(result: dict, show_sql: bool, show_debug: bool):
     if narrative:
         st.markdown(narrative)
         # Bouton copier
-        st.markdown(
-            f"""<button class="copy-btn" 
-                onclick="navigator.clipboard.writeText(`{narrative.replace('`','').replace(chr(10),' ')}`)">
-                Copier la réponse
-            </button>""",
-            unsafe_allow_html=True
-        )
+        if narrative and result.get("route") not in ("system", "welcome"):
+           with st.expander("Copier la réponse", expanded=False):
+             st.code(narrative, language=None)
 
     if show_debug and result.get("intent"):
         st.caption(f"Intent: `{result['intent']}` | Route: `{result.get('route','?')}` | {result.get('elapsed_ms',0):.0f}ms")
@@ -203,8 +207,8 @@ def display_result(result: dict, show_sql: bool, show_debug: bool):
 
 
 # ─── Titre ───────────────────────────────────────────────────────────────────
-st.title("Chat avec les résultats électoraux")
-st.caption("Elections législatives ivoiriennes — 27 décembre 2025")
+st.title("Explorer les résultats des élections Legislatives CI 2025")
+#st.caption("Elections législatives ivoiriennes — 27 décembre 2025")
 
 # ─── Message de bienvenue ────────────────────────────────────────────────────
 if not st.session_state["messages"]:
@@ -212,21 +216,21 @@ if not st.session_state["messages"]:
         "question": "", "intent": "welcome", "route": "system",
         "sql": None, "data": None, "chart_type": None,
         "error": None, "elapsed_ms": 0, "rag_context": None,
-        "narrative": """Bienvenue sur **Election Chat CI 2025** !
+        "narrative": """Bienvenue, je suis  **Electia** !
 
-Je suis votre assistant pour explorer les résultats des **élections législatives ivoiriennes du 27 décembre 2025**.
+ Votre assistant Intelligent pour explorer les résultats de ces **élections **.
 
 Je peux vous aider sur :
 - Les **résultats par parti** — sièges, voix, pourcentages
 - Les **candidats élus** par circonscription ou région
 - Les **statistiques** — participation, bulletins nuls, suffrages
-- Les **analyses locales** — Abidjan, Bouaké, Agboville...
+
 
 **Exemples pour commencer :**
 > *"Combien de sièges a remporté le RHDP ?"*
 > *"Qui a gagné à Agboville ?"*
 > *"Taux de participation par région"*
-> *"Parle moi d'Abidjan"*
+
 
 Posez votre première question ci-dessous""",
     }
