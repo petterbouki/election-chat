@@ -1,5 +1,5 @@
 # Base de données générée
-data/elections.duckdb
+#data/elections.duckdb
 data/rag_index.faiss
 data/rag_meta.pkl
 data/traces.jsonl
