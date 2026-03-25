@@ -10,72 +10,71 @@ import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
-#from startup import init_db
-#init_db()
 
 from agent.sql_agent import SQLAgent, Intent
 from agent.chart import make_chart, suggest_chart_type
 
 st.set_page_config(
-    page_title="Elections Legislatives CI 2025 ",
+    page_title="Elections CI 2025 — Chat",
     page_icon="🗳️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",  # Mobile : sidebar fermée par défaut
 )
 
 DB_PATH = os.getenv("DB_PATH", "data/elections.duckdb")
 
 st.markdown("""
 <style>
-.stat-box { background:#1D9E75; color:white; border-radius:12px; padding:16px;
-            text-align:center; font-size:2rem; font-weight:700; margin:8px 0; }
-/* Auto-scroll */
-.main .block-container {
-    padding-bottom: 200px;
+/* Mobile responsive */
+@media (max-width: 768px) {
+    [data-testid="stSidebar"] { display: none; }
+    .block-container { padding: 1rem 0.5rem !important; }
 }
+
+/* Bouton copier */
+.copy-btn {
+    background: none; border: 1px solid var(--color-border-secondary);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    font-size: 12px; color: var(--color-text-secondary);
+    margin-top: 4px;
+}
+.copy-btn:hover { background: var(--color-background-secondary); }
+
+/* Questions rapides */
+.quick-label { font-size: 13px; color: var(--color-text-secondary); margin-bottom: 4px; }
 </style>
-<script>
-// Auto-scroll vers le bas
-function scrollToBottom() {
-    const messages = document.querySelectorAll('[data-testid="stChatMessage"]');
-    if (messages.length > 0) {
-        messages[messages.length - 1].scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
-}
-setTimeout(scrollToBottom, 500);
-</script>
 """, unsafe_allow_html=True)
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.title("🗳️ Elections Legislatives CI 2025")
-    st.markdown("")
-   # st.divider()
-    #st.markdown("**Questions suggérées**")
-    
-   # suggestions = [
-    #    "Combien de sièges a remporté le RHDP ?",
-     #   "Top 10 candidats par score",
-      #  "Taux de participation par région",
-       # "Histogramme des élus par parti",
-      #  "Qui a gagné à Agboville ?",
-       # "Les élus d'Abidjan",
-       # "Quelle circonscription a le plus fort taux ?",
-       # "Quels partis ont remporté des sièges ?",
-   # ]
-    #for s in suggestions:
-     #   if st.button(s, key=f"sug_{s[:20]}", use_container_width=True):
-      #      st.session_state["pending_question"] = s
+    st.title("Elections CI 2025")
+    st.markdown("**Assemblée Nationale — 27 décembre 2025**")
+    st.divider()
+    st.markdown("**Questions suggérées**")
+    suggestions = [
+        "Combien de sièges a remporté le RHDP ?",
+        "Top 10 candidats par score",
+        "Taux de participation par région",
+        "Histogramme des élus par parti",
+        "Qui a gagné à Agboville ?",
+        "Les élus d'Abidjan",
+        "Quelle circonscription a le plus fort taux ?",
+        "Quels partis ont remporté des sièges ?",
+    ]
+    for s in suggestions:
+        if st.button(s, key=f"sug_{s[:20]}", use_container_width=True):
+            st.session_state["pending_question"] = s
 
     st.divider()
-    if st.button("🔄 Effacer la conversation", use_container_width=True):
+    if st.button("Effacer la conversation", use_container_width=True):
         st.session_state["messages"] = []
+        st.session_state["chart_counter"] = 0
         if "agent" in st.session_state:
             st.session_state["agent"].reset_history()
         st.rerun()
 
-    show_sql   = st.toggle("Afficher le SQL généré", value=True)
-    show_debug = st.toggle("Mode debug (intent)", value=False)
+    show_sql   = st.toggle("Afficher le SQL généré", value=False)
+    show_debug = st.toggle("Mode debug", value=False)
 
 # ─── Agent ───────────────────────────────────────────────────────────────────
 @st.cache_resource
@@ -90,6 +89,9 @@ if "agent" not in st.session_state:
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
+
+if "chart_counter" not in st.session_state:
+    st.session_state["chart_counter"] = 0
 
 agent: SQLAgent = st.session_state["agent"]
 
@@ -128,7 +130,6 @@ def build_narrative(result: dict) -> str:
             return f"**{val}**"
         else:
             return f"**{val}**\n\n{narrative}".strip()
-
     elif len(df) == 1:
         parts = []
         for i in range(len(df.columns)):
@@ -153,22 +154,33 @@ def should_show_chart(df, intent, requested_type):
 
 def display_result(result: dict, show_sql: bool, show_debug: bool):
     if result.get("error"):
-        st.error(result["error"])
+        # Réponse humaine pour les erreurs
+        st.warning(
+            "Je n'ai pas pu traiter cette demande. "
+            "Essayez de reformuler votre question en précisant "
+            "une circonscription, un parti ou un candidat."
+        )
         return
 
     narrative = build_narrative(result)
     if narrative:
         st.markdown(narrative)
+        # Bouton copier
+        st.markdown(
+            f"""<button class="copy-btn" 
+                onclick="navigator.clipboard.writeText(`{narrative.replace('`','').replace(chr(10),' ')}`)">
+                Copier la réponse
+            </button>""",
+            unsafe_allow_html=True
+        )
 
     if show_debug and result.get("intent"):
-        route = result.get("route", "?")
-        st.caption(f"Intent: `{result['intent']}` | Route: `{route}` | {result.get('elapsed_ms',0):.0f}ms")
+        st.caption(f"Intent: `{result['intent']}` | Route: `{result.get('route','?')}` | {result.get('elapsed_ms',0):.0f}ms")
 
     if show_sql and result.get("sql"):
         with st.expander("SQL généré", expanded=False):
             st.code(result["sql"], language="sql")
 
-    figure = None
     df = result.get("data")
     route = result.get("route", "sql")
 
@@ -182,19 +194,17 @@ def display_result(result: dict, show_sql: bool, show_debug: bool):
             figure = make_chart(df, chart_type=chart_type,
                                 title=result.get("question","")[:60])
             if figure:
-                if figure:
-                    import hashlib
-                    chart_key = hashlib.md5(
-                       f"{result.get('question','')}{result.get('elapsed_ms',0)}".encode()
-                        ).hexdigest()[:8]
-                    st.plotly_chart(figure, use_container_width=True, key=f"chart_{chart_key}")
-
-    result["figure"] = figure
+                st.session_state["chart_counter"] += 1
+                st.plotly_chart(
+                    figure,
+                    use_container_width=True,
+                    key=f"chart_{st.session_state['chart_counter']}"
+                )
 
 
 # ─── Titre ───────────────────────────────────────────────────────────────────
-st.title("🗳️ Chat avec les résultats électoraux")
-#st.caption("Élections législatives ivoiriennes  2025")
+st.title("Chat avec les résultats électoraux")
+st.caption("Elections législatives ivoiriennes — 27 décembre 2025")
 
 # ─── Message de bienvenue ────────────────────────────────────────────────────
 if not st.session_state["messages"]:
@@ -202,22 +212,23 @@ if not st.session_state["messages"]:
         "question": "", "intent": "welcome", "route": "system",
         "sql": None, "data": None, "chart_type": None,
         "error": None, "elapsed_ms": 0, "rag_context": None,
-        "narrative": """ Bienvenue sur ELECTIA 👋
+        "narrative": """Bienvenue sur **Election Chat CI 2025** !
 
-Votre assistant intelligent pour analyser les élections législatives ivoiriennes de 2025.
+Je suis votre assistant pour explorer les résultats des **élections législatives ivoiriennes du 27 décembre 2025**.
 
 Je peux vous aider sur :
--  Les **résultats par parti** — sièges, voix, pourcentages
--  Les **statistiques** — participation, bulletins nuls, suffrages
--  Les **analyses locales** — Abidjan, Bouaké, Agboville...
+- Les **résultats par parti** — sièges, voix, pourcentages
+- Les **candidats élus** par circonscription ou région
+- Les **statistiques** — participation, bulletins nuls, suffrages
+- Les **analyses locales** — Abidjan, Bouaké, Agboville...
 
-**Quelques exemples pour commencer :**
+**Exemples pour commencer :**
 > *"Combien de sièges a remporté le RHDP ?"*
 > *"Qui a gagné à Agboville ?"*
 > *"Taux de participation par région"*
+> *"Parle moi d'Abidjan"*
 
-
-Posez votre première question ci-dessous """,
+Posez votre première question ci-dessous""",
     }
     st.session_state["messages"].append({
         "role": "assistant",
@@ -233,12 +244,11 @@ for msg in st.session_state["messages"]:
         else:
             display_result(msg.get("result", {}), show_sql, show_debug)
 
-# ─── Input + Questions rapides ───────────────────────────────────────────────
-# IMPORTANT : chat_input doit être avant les boutons pour éviter les conflits
+# ─── Input ───────────────────────────────────────────────────────────────────
 question = st.chat_input("Posez votre question sur les élections...")
 
-# Questions rapides sous le prompt
-# st.markdown("#####  Questions rapides")
+# Questions rapides
+st.markdown('<p class="quick-label">Questions rapides :</p>', unsafe_allow_html=True)
 cols = st.columns(3)
 quick_questions = [
     "Combien de sièges a le RHDP ?",
@@ -251,9 +261,8 @@ quick_questions = [
 for i, q in enumerate(quick_questions):
     with cols[i % 3]:
         if st.button(q, key=f"quick_{i}", use_container_width=True):
-            question = q  # Utilise directement sans rerun
+            question = q
 
-# Récupère aussi depuis la sidebar
 if not question:
     question = st.session_state.pop("pending_question", None)
 
@@ -273,17 +282,4 @@ if question:
         "content": result.get("narrative", ""),
         "result": result,
     })
-
-    # Force le scroll vers le bas
-    st.markdown("""
-    <script>
-      setTimeout(function() {
-      const messages = document.querySelectorAll('[data-testid="stChatMessage"]');
-      if (messages.length > 0) {
-        messages[messages.length - 1].scrollIntoView({ behavior: 'smooth', block: 'end' });
-      }
-      }, 300);
-    </script>
-    """, unsafe_allow_html=True)
-
     st.rerun()
