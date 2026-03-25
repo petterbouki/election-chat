@@ -10,8 +10,8 @@ import streamlit as st
 import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
-from startup import init_db
-init_db()
+#from startup import init_db
+#init_db()
 
 from agent.sql_agent import SQLAgent, Intent
 from agent.chart import make_chart, suggest_chart_type
