@@ -161,22 +161,27 @@ def should_show_chart(df, intent, requested_type):
 
 
 def display_result(result: dict, show_sql: bool, show_debug: bool):
-    if result.get("error"):
-        # Réponse humaine pour les erreurs
+    error = result.get("error")
+    df = result.get("data")
+    narrative = build_narrative(result)
+
+    # Message d'erreur seulement si erreur ET pas de données ET pas de narrative
+    if error and (df is None or df.empty) and not narrative:
         st.warning(
             "Je n'ai pas pu traiter cette demande. "
             "Essayez de reformuler votre question en précisant "
             "une circonscription, un parti ou un candidat."
         )
+        if show_debug:
+            st.caption(f"Erreur technique: {error}")
         return
 
-    narrative = build_narrative(result)
+    # Affiche la narrative
     if narrative:
         st.markdown(narrative)
-        # Bouton copier
-        if narrative and result.get("route") not in ("system", "welcome"):
-           with st.expander("Copier la réponse", expanded=False):
-             st.code(narrative, language=None)
+        if result.get("route") not in ("system", "welcome"):
+            with st.expander("Copier la réponse", expanded=False):
+                st.code(narrative, language=None)
 
     if show_debug and result.get("intent"):
         st.caption(f"Intent: `{result['intent']}` | Route: `{result.get('route','?')}` | {result.get('elapsed_ms',0):.0f}ms")
@@ -185,9 +190,7 @@ def display_result(result: dict, show_sql: bool, show_debug: bool):
         with st.expander("SQL généré", expanded=False):
             st.code(result["sql"], language="sql")
 
-    df = result.get("data")
     route = result.get("route", "sql")
-
     if df is not None and not df.empty and route == "sql":
         if len(df) > 1 or len(df.columns) > 1:
             st.dataframe(df, use_container_width=True,
@@ -204,7 +207,6 @@ def display_result(result: dict, show_sql: bool, show_debug: bool):
                     use_container_width=True,
                     key=f"chart_{st.session_state['chart_counter']}"
                 )
-
 
 # ─── Titre ───────────────────────────────────────────────────────────────────
 st.title("Explorer les résultats des élections Legislatives CI 2025")
