@@ -2,7 +2,7 @@
 
 Application de chat pour interroger en langage naturel les résultats officiels des **élections législatives ivoiriennes du 27 décembre 2025** (élection des députés à l'Assemblée Nationale).
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://election-chat-ci.streamlit.app)
+(https://electia.streamlit.app)
 
 ---
 
@@ -27,26 +27,28 @@ election-chat/
 │   ├── eval_runner.py             # Runner 15/15 (100%)
 │   └── fixtures.json              # Gold set Q&A
 ├── ingestion/                     # Pipeline extraction PDF → DuckDB
-│   └── ingest_groq_vision.py      # Extraction via Groq Vision (Llama 4 Scout)
+│   └── pipeline_vision.py         # Extraction via Groq Vision (Llama 4 Scout)
+├── tests/                         # Tests unitaires
 ├── data/
 │   ├── elections.duckdb           # Base DuckDB (205 circonscriptions)
 │   ├── circonscriptions.csv       # Données source
 │   └── candidats.csv              # 1103 candidats avec scores
 ├── startup.py                     # Initialisation base au démarrage cloud
+├── Makefile
 ├── requirements.txt
-└── .env
+└── .env.
 ```
 
 ---
 
 ## Niveaux du challenge
 
-| Niveau      |                Description                              | Statut   |
-|--------     |-------------------------------------------------------  |--------  |
-| **Level 1** | Agent Text-to-SQL + guardrails de sécurité + graphiques |  Complet |
-| **Level 2** | Router hybride SQL + RAG (questions narratives)         |  Complet |
-| **Level 3** | Détection d'ambiguïté + clarification interactive       |  Complet |
-| **Level 4** | Observabilité + suite d'évaluation 15/15 (100%)         |  Complet |
+| Niveau | Description | Statut |
+|--------|-------------|--------|
+| **Level 1** | Agent Text-to-SQL + guardrails + graphiques Plotly |  Complet |
+| **Level 2** | Router hybride SQL + RAG (questions narratives) |  Complet |
+| **Level 3** | Détection d'ambiguïté + clarification interactive |  Complet |
+| **Level 4** | Observabilité + suite d'évaluation 15/15 (100%) | Complet |
 
 ---
 
@@ -54,8 +56,6 @@ election-chat/
 
 - Python 3.10+
 - Une clé API Groq (gratuit sur [console.groq.com](https://console.groq.com))
-- Tesseract OCR
-- Poppler (pdf2image)
 
 ---
 
@@ -92,16 +92,30 @@ cp .env
 ### 1. Lancer l'application
 
 ```bash
-streamlit run app/main.py
+streamlit run app/main.py ## voir l'interface mais rien ne pourra etre fait
 ```
 
 Ouvrir [http://localhost:8501](http://localhost:8501)
 
-### 2. Ré-extraire les données depuis le PDF (optionnel)
+### 2. Pipeline d'extraction 
+  ### etapes d'extraction des données par groq vision
+
+Le pipeline extrait les données directement depuis le PDF officiel CEI via Groq Vision :
+
+```
+PDF (35 pages vectorielles)
+  └─ Conversion page → image base64 (200 DPI)
+        └─ Groq Vision API (Llama 4 Scout)
+              └─ JSON structuré { circonscriptions, candidats }
+                    └─ DuckDB (205 circs, 1103 candidats)
+                          └─ Export CSV (déploiement cloud)
+```
 
 ```bash
 # Nécessite une clé Groq avec accès Vision
-python ingest_groq_vision.py data/raw/edan_2025.pdf
+python ingestion/pipeline_vision.py data/raw/edan_2025.pdf ## arrive à extraire 198/205 circonscription
+python ingestion/fix_missing.py data/raw/edan_2025.pdf ## ajoute 2 autres sur les 198  du coup , on passe a 200
+python ingestion/fix_missing2.py data/raw/edan_2025.pdf
 ```
 
 L'extraction dure environ **8-10 minutes** (35 pages via Groq Vision).
@@ -134,17 +148,17 @@ Latence moyenne : 491ms
 
 ## Questions supportées (exemples)
 
-| Question                               | Type          | Route         |
-|------------------------------- --------|--- ----       |---            |
-| Combien de sièges a remporté le RHDP ? | Agrégation    | SQL           |
-| Top 10 candidats par score             | Classement    | SQL           |
-| Histogramme des élus par parti         | Graphique     | SQL           |
-| Taux de participation par région       | Agrégation    | SQL           |
-| Qui a gagné à Agboville ?              | Lookup narratif | RAG         |
-| Parle moi d'Abidjan                    | Narratif      | RAG           |
-| Qui a gagné à Bouaké ?                 | Ambiguïté     | Clarification |
-| Quel temps faisait-il le jour du vote ?| Hors-scope    | Refus         |
-| DROP TABLE candidats                   | Injection     | Bloqué        |
+| Question                                         | Type               | Route         |
+|------------------------------------------------- |------------------  |-------------  |
+| Combien de sièges a remporté le RHDP ?           | Agrégation         | SQL           |
+| Top 10 candidats par score                       | Classement         | SQL           |
+| Histogramme des élus par parti                   | Graphique          | SQL           |
+| Taux de participation par région                 | Agrégation         | SQL           |
+| Qui a gagné à Agboville ?                        | Lookup narratif    | RAG           |
+| Parle moi d'Abidjan                              | Narratif           | RAG           |
+| Qui a gagné à Bouaké ?                           | Ambiguïté          | Clarification |
+| Quel temps faisait-il le jour du vote ?          | Hors-scope         | Refus         |
+| DROP TABLE candidats                             | Injection SQL      | Bloqué        |
 
 ---
 
@@ -163,20 +177,20 @@ Latence moyenne : 491ms
 - **Source** : PDF officiel CEI — `EDAN_2025_RESULTAT_NATIONAL_DETAILS.pdf` (35 pages)
 - **Extraction** : Groq Vision (Llama 4 Scout) — lecture des tableaux vectoriels
 - **Couverture** : 205 circonscriptions, 1103 candidats, 203 élus
-- **Défi** : Le PDF est vectoriel pur (pas de texte extractible) — OCR classique insuffisant
+- **Défi** : Le PDF est vectoriel pur — OCR classique insuffisant, Groq Vision utilisé
 
 ---
 
 ## Stack technique
 
-| Composant             | Technologie                        |
-|---------------------- |----------------------------------- |
-| Extraction PDF        | Groq Vision — Llama 4 Scout        |
-| LLM                   | Groq — Llama 3.3 70B Versatile     |
-| Base de données       | DuckDB                             |
-| Interface             | Streamlit                          |
-| Graphiques            | Plotly                             |
-| Recherche RAG         | DuckDB full-text (sans embeddings) |
+| Composant      | Technologie                               |
+|----------------|-------------------------------------------|
+| Extraction PDF | Groq Vision — Llama 4 Scout               |
+| LLM            | Groq — Llama 3.3 70B Versatile            |
+| Base de données| DuckDB                                    |
+| Interface      | Streamlit                                 |
+| Graphiques     | Plotly                                    |
+| Recherche RAG  | DuckDB full-text (sans embeddings lourds) |
 
 ---
 
@@ -209,31 +223,22 @@ Question utilisateur
    Guardrails ──── Injection/DROP ── Bloqué
         │
         
-   Out-of-scope ──────────────────► Refus poli
+   Out-of-scope ──────────────────> Refus poli + suggestions
         │
         
-   Disambiguate ── Ambiguïté ──────► Clarification
+   Disambiguate ── Ambiguïté ──────> Liste de choix
         │
         
    Router
-    ├── SQL  ── analytique (combien, taux, top, histogramme)
-    └── RAG  ── narratif   (qui a gagné, parle moi de, qui est)
+    ├── SQL  <── analytique (combien, taux, top, histogramme)
+    └── RAG  <── narratif   (qui a gagné, parle moi de, qui est)
 ```
 
 ---
 
-## Limitations connues
+## Normalisation des entités
 
-- 5 IDs de circonscriptions non trouvés dans le PDF (numérotation non continue : 87, 89, 90, 91, 92)
-- Certains noms de candidats mal lus par Groq Vision (apostrophes ivoiriennes : N'GUESSAN)
-- La sélection après clarification (taper "1", "2") non encore gérée automatiquement
-- Données simulées pour les candidats des circonscriptions difficiles à extraire
-
----
-
-## Prochaines étapes
-
-- Gérer la sélection numérique après clarification (Level 3 complet)
-- Ajouter embeddings multilingues pour un RAG plus précis
-- Tracing end-to-end avec Langfuse ou OpenTelemetry
-- Re-extraction complète avec Groq Vision amélioré
+- Alias partis : `R.H.D.P`, `rhdp`, `ECS` → `RHDP`
+- Alias partis : `PDC-RDA`, `PDCI` → `PDCI-RDA`
+- Accents : `INDEPENDANT` → `INDÉPENDANT`
+- Recherche floue pour les noms de localités (Tiapum → TIAPOUM)
